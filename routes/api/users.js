@@ -141,21 +141,15 @@ router.patch(
   upload.single('avatar'),
   async (req, res, next) => {
     const { path: tempUpload, originalname } = req.file;
+
+    const resizeImage = await Jimp.read(tempUpload);
+    await resizeImage.resize(250, 250);
+    await resizeImage.writeAsync(tempUpload);
+
     const [extension] = originalname.split('.').reverse();
     const newFileName = `${req.user._id}.${extension}`;
     const fileUpload = path.join(avatarsDir, newFileName);
     await fs.rename(tempUpload, fileUpload);
-
-    // const resizeFile = await Jimp.read(fileUpload, (err, img) => {
-    //   try {
-    //     if (err) {
-    //       throw err;
-    //     }
-    //     img.resize(250, 250).write(`${req.user._id}.${extension}`);
-    //   } catch (error) {
-    //     next(error);
-    //   }
-    // });
     const avatarURL = path.join('avatars', newFileName);
     await User.findByIdAndUpdate(req.user._id, { avatarURL }, { new: true });
     res.json({ avatarURL });
