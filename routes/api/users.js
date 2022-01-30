@@ -1,7 +1,11 @@
+const fs = require('fs/promises');
 const express = require('express');
 const { BadRequest, Conflict, Unauthorized } = require('http-errors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const gravatar = require('gravatar');
+const path = require('path');
+const Jimp = require('jimp');
 
 const {
   User,
@@ -9,9 +13,11 @@ const {
   joiSignupSchema,
   joiLoginSchema,
 } = require('../../models');
-const { authenticate } = require('../../middlewares');
+const { authenticate, upload } = require('../../middlewares');
 
 const router = express.Router();
+
+const avatarsDir = path.join(__dirname, '../../', 'public', 'avatars');
 
 const { SECRET_KEY } = process.env;
 
@@ -28,7 +34,13 @@ router.post('/signup', async (req, res, next) => {
     }
     const salt = await bcrypt.genSalt(10);
     const hashPassword = await bcrypt.hash(password, salt);
-    const newUser = await User.create({ name, email, password: hashPassword });
+    const avatarURL = gravatar.url(email);
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashPassword,
+      avatarURL,
+    });
     res.status(201).json({
       user: {
         name: newUser.name,
@@ -74,23 +86,6 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-router.get('/logout', authenticate, async (req, res) => {
-  const { _id } = req.user;
-  await User.findByIdAndUpdate(_id, { token: null });
-  res.sendStatus(204);
-});
-
-router.get('/current', authenticate, async (req, res) => {
-  const { name, email, subscription } = req.user;
-  res.json({
-    user: {
-      name,
-      email,
-      subscription,
-    },
-  });
-});
-
 router.patch('/', authenticate, async (req, res, next) => {
   try {
     const { _id } = req.user;
@@ -122,5 +117,43 @@ router.patch('/', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+router.get('/logout', authenticate, async (req, res) => {
+  const { _id } = req.user;
+  await User.findByIdAndUpdate(_id, { token: null });
+  res.sendStatus(204);
+});
+
+router.get('/current', authenticate, async (req, res) => {
+  const { name, email, subscription } = req.user;
+  res.json({
+    user: {
+      name,
+      email,
+      subscription,
+    },
+  });
+});
+
+router.patch(
+  '/avatars',
+  authenticate,
+  upload.single('avatar'),
+  async (req, res, next) => {
+    const { path: tempUpload, originalname } = req.file;
+
+    const resizeImage = await Jimp.read(tempUpload);
+    await resizeImage.resize(250, 250);
+    await resizeImage.writeAsync(tempUpload);
+
+    const [extension] = originalname.split('.').reverse();
+    const newFileName = `${req.user._id}.${extension}`;
+    const fileUpload = path.join(avatarsDir, newFileName);
+    await fs.rename(tempUpload, fileUpload);
+    const avatarURL = path.join('avatars', newFileName);
+    await User.findByIdAndUpdate(req.user._id, { avatarURL }, { new: true });
+    res.json({ avatarURL });
+  },
+);
 
 module.exports = router;

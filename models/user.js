@@ -1,6 +1,5 @@
 const { Schema, model } = require('mongoose');
 const Joi = require('joi');
-const { RuleTester } = require('eslint');
 
 const emailRegExp = /^\w+([\.-]?\w+)+@\w+([\.:]?\w+)+(\.[a-zA-Z0-9]{2,3})+$/;
 
@@ -14,7 +13,7 @@ const userSchema = Schema(
       type: String,
       match: emailRegExp,
       required: true,
-      unique: RuleTester,
+      unique: true,
     },
     password: {
       type: String,
@@ -29,6 +28,10 @@ const userSchema = Schema(
     token: {
       type: String,
       default: null,
+    },
+    avatarURL: {
+      type: String,
+      default: '',
     },
   },
   { versionKey: false, timestamps: true },
